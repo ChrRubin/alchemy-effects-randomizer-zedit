@@ -1,0 +1,22 @@
+<h2>Alchemy Effects Randomizer</h2>
+
+<section>
+    <ignore-plugins patcher-id="randomizeAlchemyPatcher"></ignore-plugins>
+</section>
+
+<section>
+    <h3>Randomization Type:</h3>
+    <div title="Randomizer only swaps around effect groups between ingredients.">
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="groups">Keep Effect Groups (Least random)</label>
+    </div>
+    <div title="Randomizer will randomly assign effects to ingredients from the loaded pool while following the effect distribution.">
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="dist">Keep Effect Distribution (More random)</label>
+    </div>
+    <div title="Randomizer will ALWAYS randomly assign effects to ingredients from the loaded pool.">
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="random">Ignore Effect Distribution (Most Random)</label>
+    </div>
+</section>
+
+<section>
+    <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.setEsl">Flag as ESL</label>
+</section>

@@ -1,0 +1,12 @@
+{
+  "id": "randomizeAlchemyPatcher",
+  "name": "Alchemy Ingredients Randomizer",
+  "author": "ChrRubin",
+  "version": "1.0",
+  "released": "10/24/2020",
+  "updated": "10/24/2020",
+  "description": "Randomizes the effects of alchemy ingredients.",
+  "requires": ["unifiedPatchingFramework"],
+  "moduleLoader": "UPF",
+  "canHotLoad": true
+}
