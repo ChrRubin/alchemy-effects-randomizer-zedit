@@ -77,22 +77,43 @@ registerPatcher({
             else{
                 throw new ChrCustomError("Invalid randomization type selected!");
             }
+
+            locals.winningIngrs = winningIngrs;
         },
         process: [{
-            load: {
-                signature: "INGR",
+            records: (filesToPatch, helpers, settings, locals) => {
+                return locals.winningIngrs;
             },
             patch: (record, helpers, settings, locals) => {
                 let recordEffects = xelib.GetElement(record, "Effects");
-                let newEffects;
 
                 if (settings.randType === "groups"){
-                    newEffects = locals.effectGroups[locals.index];
+                    xelib.SetElement(recordEffects, locals.effectGroups[locals.index]);
                     locals.index += 1;
+                    return;
                 }
-                
 
-                xelib.SetElement(recordEffects, newEffects);
+                let addedEffectsID = [];
+                let i = 0;
+
+                while (i < 4) {
+                    let randomIndex = Math.floor(Math.random() * (locals.effects.length + 1));
+                    let randomEffect = locals.effects[randomIndex];
+                    let randomEffectID = xelib.GetHexFormID(xelib.GetLinksTo(randomEffect, "EFID"));
+
+                    if (addedEffectsID.some(id => id === randomEffectID)){
+                        continue; // FIXME: This is definitely a recipe for infinite loops...
+                    }
+
+                    addedEffectsID.push(randomEffectID);
+                    if(settings.randType === "dist"){
+                        locals.effects.splice(randomIndex, 1);
+                    }
+
+                    let recordEffect = xelib.GetElement(recordEffects, `[${i}]`);
+                    xelib.SetElement(recordEffect, randomEffect);
+                    i += 1;
+                }
             }
         }],
         finalize: () => {
