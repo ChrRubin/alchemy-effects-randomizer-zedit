@@ -18,6 +18,119 @@ class ChrCustomError extends Error {
     }
 }
 
+class IngrEffect {
+    constructor(handle){
+        /** @type {number} Handle to effect element */
+        this.handle = handle;
+
+        /** @type {number} Handle to linked effect record */
+        this.efidLink = xelib.GetLinksTo(handle, "EFID");
+
+        /** @type {string} FormID of effect record */
+        this.formID = xelib.GetHexFormID(this.efidLink);
+    }
+
+    /**
+     * Check if given effect is the same as this effect.
+     * @param {IngrEffect} effect
+     * @return {boolean} True if effect is duplicate.
+     * @memberof IngrEffect
+     */
+    isDuplicate(effect){
+        return effect.formID === this.formID;
+    }
+}
+
+class IngrEffectList {
+    /**
+     * @typedef {Object} UniqueFormIDsObj
+     * @property {string} formID FormID
+     * @property {number} count Number of occurences
+     */
+    /**
+     * @typedef {Object} GetResultObj
+     * @property {number} index Index of result in list
+     * @property {IngrEffect} value Value of effect
+     */
+
+    /**
+     * Creates an instance of IngrEffectList.
+     * @param {number[]} handles Array of effect handles
+     * @memberof IngrEffectList
+     */
+    constructor(handles){
+        const formIdSet = new Set();
+
+        /** @type {IngrEffect[]} */
+        this.list = handles.map(handle => {
+            const ingrEffect = new IngrEffect(handle);
+            this.efidSet.add(ingrEffect.formID);
+            return ingrEffect;
+        });
+
+        /** @type {UniqueFormIDsObj[]} */
+        this.uniqueFormIDs = [];
+
+        formIdSet.forEach(formID => {
+            let count = 0;
+            this.list.forEach(effect => {
+                if(effect.formID === formID){
+                    count += 1;
+                }
+            });
+            this.uniqueFormIDs.push({formID: formID, count: count});
+        });
+    }
+    
+    /**
+     * Get random effect from list.
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    getRandom(){
+        const i = Math.floor(Math.random() * (this.list.length + 1));
+        return {index: i, value: this.list[i]};
+    }
+
+    /**
+     * Gets the first effect with the highest occurence in the list.
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    getFirstMostOccurrence(){
+        let most, resultIndex;
+        this.uniqueFormIDs.forEach(obj => {
+            if(!most || obj.count > most.count){
+                most = obj;
+            }
+        });
+
+        const value = this.list.find((effect, index) => {
+            if(effect.formID === most.editorID){
+                resultIndex = index;
+                return true;
+            }
+        });
+
+        return {index: resultIndex, value: value};
+    }
+
+    /**
+     * Removes effect on index i from list.
+     * @param {number} i Index of effect
+     * @memberof IngrEffectList
+     */
+    remove(i){
+        const effect = this.list[i];
+        this.uniqueFormIDs.forEach(obj => {
+            if(obj.formID === effect.formID){
+                obj.count -= 1;
+            }
+        });
+        this.list.splice(i, 1);
+    }
+}
+
 /**
  * Shuffles array.
  * Source: https://gist.github.com/guilhermepontes/17ae0cc71fa2b13ea8c20c94c5c35dc4
@@ -34,12 +147,6 @@ registerPatcher({
     settings: {
         label: 'Alchemy Effects Randomizer',
         templateUrl: `${patcherUrl}/partials/settings.html`,
-        // controller: function($scope) {
-        //     let patcherSettings = $scope.settings.randomizeAlchemyPatcher;
-        //     $scope.showRandTypeInfo = function() {
-
-        //     };
-        // },
         defaultSettings: {
             randType: "groups",
             setEsl: true,
@@ -48,15 +155,15 @@ registerPatcher({
     },
     execute: (patchFile, helpers, settings, locals) => ({
         initialize: () => {
-            let ingrs = helpers.loadRecords("INGR", false);
+            const ingrs = helpers.loadRecords("INGR", false);
             if (!ingrs.length){
                 throw new ChrCustomError("Failed to load INGR records!");
             }
 
-            let winningIngrs = ingrs.map(ingr => xelib.GetWinningOverride(ingr));
+            const winningIngrs = ingrs.map(ingr => xelib.GetWinningOverride(ingr));
 
             if (settings.randType === "groups"){
-                let effectGroups = [];
+                const effectGroups = [];
                 winningIngrs.forEach(ingr => {
                     effectGroups.push(xelib.GetElement(ingr, "Effects"));
                 });
@@ -65,14 +172,14 @@ registerPatcher({
                 locals.index = 0;
             }
             else if (settings.randType === "dist" || settings.randType === "random"){
-                let effects = [];
+                const effects = [];
                 winningIngrs.forEach(ingr => {
                     xelib.GetElement(ingr, "Effects").forEach(effect => {
                         effects.push(effect);
                     });
                 });
 
-                locals.effects = shuffleArray(effects);
+                locals.effects = new IngrEffectList(shuffleArray(effects));
             }
             else{
                 throw new ChrCustomError("Invalid randomization type selected!");
@@ -82,10 +189,10 @@ registerPatcher({
         },
         process: [{
             records: (filesToPatch, helpers, settings, locals) => {
-                return locals.winningIngrs;
+                return shuffleArray(locals.winningIngrs);
             },
             patch: (record, helpers, settings, locals) => {
-                let recordEffects = xelib.GetElement(record, "Effects");
+                const recordEffects = xelib.GetElement(record, "Effects");
 
                 if (settings.randType === "groups"){
                     xelib.SetElement(recordEffects, locals.effectGroups[locals.index]);
@@ -93,25 +200,35 @@ registerPatcher({
                     return;
                 }
 
-                let addedEffectsID = [];
+                /** @type {IngrEffect[]} */
+                const addedEffects = [];
                 let i = 0;
 
                 while (i < 4) {
-                    let randomIndex = Math.floor(Math.random() * (locals.effects.length + 1));
-                    let randomEffect = locals.effects[randomIndex];
-                    let randomEffectID = xelib.GetHexFormID(xelib.GetLinksTo(randomEffect, "EFID"));
+                    /** @type {GetResultObj} */
+                    let result;
 
-                    if (addedEffectsID.some(id => id === randomEffectID)){
-                        continue; // FIXME: This is definitely a recipe for infinite loops...
+                    if (settings.randType === "dist" && i === 0){ 
+                        result = locals.effects.getFirstMostOccurrence(); 
+                    }
+                    else{
+                        result = locals.effects.getRandom();
                     }
 
-                    addedEffectsID.push(randomEffectID);
-                    if(settings.randType === "dist"){
-                        locals.effects.splice(randomIndex, 1);
+                    const resultIndex = result.index;
+                    const resultEffect = result.value;
+                    
+                    if (addedEffects.some(effect => effect.formID === resultEffect.formID)){
+                        continue;
+                    }
+                    
+                    addedEffects.push(resultEffect);
+                    if (settings.randType === "dist"){
+                        locals.effects.remove(resultIndex);
                     }
 
-                    let recordEffect = xelib.GetElement(recordEffects, `[${i}]`);
-                    xelib.SetElement(recordEffect, randomEffect);
+                    const recordEffect = xelib.GetElement(recordEffects, `[${i}]`);
+                    xelib.SetElement(recordEffect, resultEffect.handle);
                     i += 1;
                 }
             }
