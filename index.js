@@ -28,6 +28,9 @@ class IngrEffect {
 
         /** @type {string} FormID of effect record */
         this.formID = xelib.GetHexFormID(this.efidLink);
+
+        /** @type {string} EditorID of effect record */
+        this.editorID = xelib.EditorID(this.efidLink);
     }
 
     /**
@@ -64,7 +67,7 @@ class IngrEffectList {
         /** @type {IngrEffect[]} */
         this.list = handles.map(handle => {
             const ingrEffect = new IngrEffect(handle);
-            this.efidSet.add(ingrEffect.formID);
+            formIdSet.add(ingrEffect.formID);
             return ingrEffect;
         });
 
@@ -88,7 +91,7 @@ class IngrEffectList {
      * @memberof IngrEffectList
      */
     getRandom(){
-        const i = Math.floor(Math.random() * (this.list.length + 1));
+        const i = Math.floor(Math.random() * this.list.length);
         return {index: i, value: this.list[i]};
     }
 
@@ -106,7 +109,7 @@ class IngrEffectList {
         });
 
         const value = this.list.find((effect, index) => {
-            if(effect.formID === most.editorID){
+            if(effect.formID === most.formID){
                 resultIndex = index;
                 return true;
             }
@@ -174,7 +177,7 @@ registerPatcher({
             else if (settings.randType === "dist" || settings.randType === "random"){
                 const effects = [];
                 winningIngrs.forEach(ingr => {
-                    xelib.GetElement(ingr, "Effects").forEach(effect => {
+                    xelib.GetElements(ingr, "Effects").forEach(effect => {
                         effects.push(effect);
                     });
                 });
@@ -192,6 +195,9 @@ registerPatcher({
                 return shuffleArray(locals.winningIngrs);
             },
             patch: (record, helpers, settings, locals) => {
+                const formid = xelib.GetHexFormID(record);
+                helpers.logMessage(`Patching ${formid}...`);
+
                 const recordEffects = xelib.GetElement(record, "Effects");
 
                 if (settings.randType === "groups"){
@@ -218,7 +224,7 @@ registerPatcher({
                     const resultIndex = result.index;
                     const resultEffect = result.value;
                     
-                    if (addedEffects.some(effect => effect.formID === resultEffect.formID)){
+                    if (addedEffects.some(effect => effect.isDuplicate(resultEffect))){
                         continue;
                     }
                     
