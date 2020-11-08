@@ -6,7 +6,9 @@
  * @copyright ChrRubin 2020
  */
 
-/* global info, xelib, registerPatcher, patcherUrl */
+/* global info, xelib, registerPatcher, patcherUrl, patcherPath, fh */
+
+const logPath = `${patcherPath}\\RandomizeAlchemyLog.txt`;
 
 class ChrCustomError extends Error {
     constructor(message) {
@@ -26,11 +28,20 @@ class IngrEffect {
         /** @type {number} Handle to linked effect record */
         this.efidLink = xelib.GetLinksTo(handle, "EFID");
 
-        /** @type {string} FormID of effect record */
+        /** @type {string} FormID of linked effect record */
         this.formID = xelib.GetHexFormID(this.efidLink);
 
-        /** @type {string} EditorID of effect record */
-        this.editorID = xelib.EditorID(this.efidLink);
+        /** @type {string} Name of linked effect record */
+        this.name = xelib.Name(this.efidLink);
+
+        /** @type {string} Magnitude of effect rounded to 6 decimal places */
+        this.magnitude = xelib.GetFloatValue(handle, "EFIT\\Magnitude").toFixed(6);
+
+        /** @type {number} Area of effect */
+        this.area = xelib.GetUIntValue(handle, "EFIT\\Area");
+
+        /** @type {number} Duration of effect */
+        this.duration = xelib.GetUIntValue(handle, "EFIT\\Duration");
     }
 
     /**
@@ -163,6 +174,13 @@ registerPatcher({
                 throw new ChrCustomError("Failed to load INGR records!");
             }
 
+            // Stores output log strings
+            locals.logArray = []; 
+
+            const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}`;
+            helpers.logMessage(settingsLog);
+            locals.logArray.push(settingsLog);
+
             const winningIngrs = ingrs.map(ingr => xelib.GetWinningOverride(ingr));
 
             if (settings.randType === "groups"){
@@ -198,11 +216,23 @@ registerPatcher({
                 const formid = xelib.GetHexFormID(record);
                 helpers.logMessage(`Patching ${formid}...`);
 
-                const recordEffects = xelib.GetElement(record, "Effects");
+                const recordEffectsElement = xelib.GetElement(record, "Effects");
+
+                locals.logArray.push("==============================");
+                locals.logArray.push(`INGR: ${xelib.Name(record)} [${formid}]`);
+
+                const originalEffects = xelib.GetElements(record, "Effects").map(effect => new IngrEffect(effect));
+                locals.logArray.push(`Original effects:`);
+                originalEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
 
                 if (settings.randType === "groups"){
-                    xelib.SetElement(recordEffects, locals.effectGroups[locals.index]);
+                    const newEffectGroup = locals.effectGroups[locals.index];
+                    xelib.SetElement(recordEffectsElement, newEffectGroup);
                     locals.index += 1;
+
+                    const newEffects = xelib.GetElements(newEffectGroup).map(effect => new IngrEffect(effect));
+                    locals.logArray.push(`New effects:`);
+                    newEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
                     return;
                 }
 
@@ -233,15 +263,21 @@ registerPatcher({
                         locals.effects.remove(resultIndex);
                     }
 
-                    const recordEffect = xelib.GetElement(recordEffects, `[${i}]`);
+                    const recordEffect = xelib.GetElement(recordEffectsElement, `[${i}]`);
                     xelib.SetElement(recordEffect, resultEffect.handle);
                     i += 1;
                 }
+
+                locals.logArray.push(`New effects:`);
+                addedEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
             }
         }],
         finalize: () => {
             helpers.logMessage(`Setting ESL flag to ${settings.setEsl}.`);
             xelib.SetRecordFlag(xelib.GetFileHeader(patchFile), "ESL", settings.setEsl);
+
+            helpers.logMessage(`Saving log file to ${logPath}`);
+            fh.saveTextFile(logPath, locals.logArray.join("\n"));
         }
     })
 });
