@@ -191,9 +191,19 @@ registerPatcher({
     settings: {
         label: 'Alchemy Effects Randomizer',
         templateUrl: `${patcherUrl}/partials/settings.html`,
+        controller: function($scope) {
+            $scope.showLog = () => {
+                if (!fh.jetpack.exists(logPath)){
+                    alert("Log file does not exist!");
+                    return;
+                }
+                fh.openFile(logPath);
+            };
+        },
         defaultSettings: {
             randType: "groups",
             setEsl: true,
+            showLog: false,
             patchFileName: 'RandomAlchemyPatch.esp'
         }
     },
@@ -206,6 +216,9 @@ registerPatcher({
 
             // Stores output log strings
             locals.logArray = []; 
+
+            locals.logArray.push(`${new Date().toString()}`);
+            locals.logArray.push("");
 
             const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}`;
             helpers.logMessage(settingsLog);
@@ -248,21 +261,10 @@ registerPatcher({
 
                 const recordEffectsElement = xelib.GetElement(record, "Effects");
 
-                locals.logArray.push("==============================");
-                locals.logArray.push(`INGR: ${xelib.Name(record)} [${formid}]`);
-
-                const originalEffects = xelib.GetElements(record, "Effects").map(effect => new IngrEffect(effect));
-                locals.logArray.push(`Original effects:`);
-                originalEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
-
                 if (settings.randType === "groups"){
                     const newEffectGroup = locals.effectGroups[locals.index];
                     xelib.SetElement(recordEffectsElement, newEffectGroup);
                     locals.index += 1;
-
-                    const newEffects = xelib.GetElements(newEffectGroup).map(effect => new IngrEffect(effect));
-                    locals.logArray.push(`New effects:`);
-                    newEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
                     return;
                 }
 
@@ -303,17 +305,36 @@ registerPatcher({
                     xelib.SetElement(recordEffect, resultEffect.handle);
                     i += 1;
                 }
-
-                locals.logArray.push(`New effects:`);
-                addedEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
             }
         }],
         finalize: () => {
-            helpers.logMessage(`Setting ESL flag to ${settings.setEsl}.`);
+            helpers.logMessage(`Setting ESL flag to ${settings.setEsl}...`);
             xelib.SetRecordFlag(xelib.GetFileHeader(patchFile), "ESL", settings.setEsl);
 
-            helpers.logMessage(`Saving log file to ${logPath}`);
+            helpers.logMessage("Logging INGR changes...");
+            xelib.GetElements(patchFile, "INGR").sort((a, b) => xelib.GetFormID(a) - xelib.GetFormID(b)).forEach(ingr => {
+                const formid = xelib.GetHexFormID(ingr);
+                const masterIngr = xelib.GetMasterRecord(ingr);
+
+                locals.logArray.push("==============================");
+                locals.logArray.push(`INGR: ${xelib.Name(ingr)} [${formid}]`);
+
+                const originalEffects = xelib.GetElements(masterIngr, "Effects").map(effect => new IngrEffect(effect));
+                locals.logArray.push(`Original effects:`);
+                originalEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
+
+                const currentEffects = xelib.GetElements(ingr, "Effects").map(effect => new IngrEffect(effect));
+                locals.logArray.push(`New effects:`);
+                currentEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
+            });
+
+            helpers.logMessage(`Saving log file to ${logPath}...`);
             fh.saveTextFile(logPath, locals.logArray.join("\n"));
+
+            if(settings.showLog){
+                helpers.logMessage("Opening log file...");
+                fh.openFile(logPath);
+            }
         }
     })
 });
