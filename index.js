@@ -94,6 +94,9 @@ class IngrEffectList {
             });
             this.uniqueFormIDs.push({formID: formID, count: count});
         });
+
+        /** @type {UniqueFormIDsObj[]} */
+        this.clonedUniqueFormIDs = [...this.uniqueFormIDs];
     }
     
     /**
@@ -112,15 +115,42 @@ class IngrEffectList {
      * @memberof IngrEffectList
      */
     getFirstMostOccurrence(){
-        let most, resultIndex;
+        /** @type {UniqueFormIDsObj} */
+        let most;
+
         this.uniqueFormIDs.forEach(obj => {
             if(!most || obj.count > most.count){
                 most = obj;
             }
         });
 
+        return this.find(most.formID);
+    }
+
+    /**
+     * Gets one unique effect. This function will only return each unique effect once, and will return 0 if no unique effect remains. 
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    getUniqueEffect(){
+        const uniqueEffect = this.clonedUniqueFormIDs.shift();
+        if(!uniqueEffect){
+            return 0;
+        }
+
+        return this.find(uniqueEffect.formID);
+    }
+
+    /**
+     * Find first effect with FormID that matches formID
+     * @param {string} formID FormID
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    find(formID){
+        let resultIndex;
         const value = this.list.find((effect, index) => {
-            if(effect.formID === most.formID){
+            if(effect.formID === formID){
                 resultIndex = index;
                 return true;
             }
@@ -192,7 +222,7 @@ registerPatcher({
                 locals.effectGroups = shuffleArray(effectGroups);
                 locals.index = 0;
             }
-            else if (settings.randType === "dist" || settings.randType === "random"){
+            else if (["distribution", "inclusion", "random"].includes(settings.randType)){
                 const effects = [];
                 winningIngrs.forEach(ingr => {
                     xelib.GetElements(ingr, "Effects").forEach(effect => {
@@ -200,7 +230,7 @@ registerPatcher({
                     });
                 });
 
-                locals.effects = new IngrEffectList(shuffleArray(effects));
+                locals.effectList = new IngrEffectList(shuffleArray(effects));
             }
             else{
                 throw new ChrCustomError("Invalid randomization type selected!");
@@ -244,11 +274,17 @@ registerPatcher({
                     /** @type {GetResultObj} */
                     let result;
 
-                    if (settings.randType === "dist" && i === 0){ 
-                        result = locals.effects.getFirstMostOccurrence(); 
+                    if (settings.randType === "distribution" && i === 0){ 
+                        result = locals.effectList.getFirstMostOccurrence(); 
+                    }
+                    else if (settings.randType === "inclusion" && i === 0){
+                        result = locals.effectList.getUniqueEffect();
+                        if (!result){
+                            result = locals.effectList.getRandom();
+                        }
                     }
                     else{
-                        result = locals.effects.getRandom();
+                        result = locals.effectList.getRandom();
                     }
 
                     const resultIndex = result.index;
@@ -259,8 +295,8 @@ registerPatcher({
                     }
                     
                     addedEffects.push(resultEffect);
-                    if (settings.randType === "dist"){
-                        locals.effects.remove(resultIndex);
+                    if (settings.randType === "distribution"){
+                        locals.effectList.remove(resultIndex);
                     }
 
                     const recordEffect = xelib.GetElement(recordEffectsElement, `[${i}]`);

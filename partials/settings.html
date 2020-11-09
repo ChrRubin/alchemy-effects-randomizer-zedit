@@ -12,10 +12,13 @@
         <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="groups">Keep Effect Groups (Least random)</label>
     </div>
     <div title="Randomizer will randomly assign effects to ingredients from the loaded pool while following the effect distribution.">
-        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="dist">Keep Effect Distribution (More random)</label>
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="distribution">Keep Effect Distribution (More random)</label>
+    </div>
+    <div title="Randomizer will ALWAYS randomly assign effects to ingredients from the loaded pool, but will ensure every effect is included at least once.">
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="inclusion">Ignore Effect Distribution, Ensure Effect Inclusion (Even more random)</label>
     </div>
     <div title="Randomizer will ALWAYS randomly assign effects to ingredients from the loaded pool. WARNING: This may cause certain effects to not be included!">
-        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="random">Ignore Effect Distribution (Most random)</label>
+        <label><input type="radio" name="randType" ng-model="settings.randomizeAlchemyPatcher.randType" value="random">Ignore Effect Distribution Completely (Most random)</label>
     </div>
 </section>
 
