@@ -8,7 +8,8 @@
 
 /* global info, xelib, registerPatcher, patcherUrl, patcherPath, fh */
 
-const logPath = `${patcherPath}\\RandomizeAlchemyLog.txt`;
+const logByIngrPath = `${patcherPath}\\logByIngredients.txt`;
+const logByEffectsPath = `${patcherPath}\\logByEffects.txt`;
 
 class ChrCustomError extends Error {
     constructor(message) {
@@ -26,13 +27,13 @@ class IngrEffect {
         this.handle = handle;
 
         /** @type {number} Handle to linked effect record */
-        this.efidLink = xelib.GetLinksTo(handle, "EFID");
+        this.efidLink = xelib.GetWinningOverride(xelib.GetLinksTo(handle, "EFID"));
 
         /** @type {string} FormID of linked effect record */
         this.formID = xelib.GetHexFormID(this.efidLink);
 
         /** @type {string} Name of linked effect record */
-        this.name = xelib.Name(this.efidLink);
+        this.name = xelib.FullName(this.efidLink);
 
         /** @type {string} Magnitude of effect rounded to 6 decimal places */
         this.magnitude = xelib.GetFloatValue(handle, "EFIT\\Magnitude").toFixed(6);
@@ -203,13 +204,28 @@ registerPatcher({
         label: 'Alchemy Effects Randomizer',
         templateUrl: `${patcherUrl}/partials/settings.html`,
         controller: function($scope) {
-            $scope.showLog = () => {
-                if (!fh.jetpack.exists(logPath)){
+            const settings = $scope.settings.randomizeAlchemyPatcher;
+
+            $scope.showLogByIngredients = () => {
+                if (!fh.jetpack.exists(logByIngrPath)){
                     alert("Log file does not exist!");
                     return;
                 }
-                fh.openFile(logPath);
+                fh.openFile(logByIngrPath);
             };
+            $scope.showLogByEffects = () => {
+                if (!fh.jetpack.exists(logByEffectsPath)){
+                    alert("Log file does not exist!");
+                    return;
+                }
+                fh.openFile(logByEffectsPath);
+            };
+
+            $scope.$watch("settings.randomizeAlchemyPatcher.randType", (newValue) => {
+                if(["groups", "distribution"].includes(newValue)){
+                    settings.ignoreDist = false;
+                }
+            });
         },
         defaultSettings: {
             randType: "groups",
@@ -227,14 +243,18 @@ registerPatcher({
             }
 
             // Stores output log strings
-            locals.logArray = []; 
+            locals.logByIngredients = []; 
+            locals.logByEffects = [];
 
-            locals.logArray.push(`${new Date().toString()}`);
-            locals.logArray.push("");
+            const dateLog = `${new Date().toString()}\n`;
 
-            const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nignoreDist: ${settings.ignoreDist}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}`;
+            locals.logByIngredients.push(dateLog);
+            locals.logByEffects.push(dateLog);
+
+            const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nignoreDist: ${settings.ignoreDist}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}\n`;
             helpers.logMessage(settingsLog);
-            locals.logArray.push(settingsLog);
+            locals.logByIngredients.push(settingsLog);
+            locals.logByEffects.push(settingsLog);
 
             const winningIngrs = ingrs.map(ingr => xelib.GetWinningOverride(ingr));
 
@@ -284,6 +304,13 @@ registerPatcher({
                 const addedEffects = [];
                 let i = 0;
 
+                function getRandom(){
+                    if (settings.ignoreDist){
+                        return locals.effectList.getRandomEffect();
+                    }
+                    return locals.effectList.getRandomFromPool();
+                }
+
                 while (i < 4) {
                     /** @type {GetResultObj} */
                     let result;
@@ -291,22 +318,17 @@ registerPatcher({
                     if (settings.randType === "distribution" && i === 0){ 
                         result = locals.effectList.getFirstMostOccurrence(); 
                     }
+                    else if (settings.randType === "distribution"){
+                        result = locals.effectList.getRandomFromPool();
+                    }
                     else if (settings.randType === "inclusion" && i === 0){
                         result = locals.effectList.getUniqueEffect();
-                        if (!result && settings.ignoreDist){
-                            result = locals.effectList.getRandomEffect();
-                        }
-                        else if (!result && !settings.ignoreDist){
-                            result = locals.effectList.getRandomFromPool();
+                        if(!result){
+                            result = getRandom();
                         }
                     }
                     else{
-                        if (settings.ignoreDist){
-                            result = locals.effectList.getRandomEffect();
-                        }
-                        else{
-                            result = locals.effectList.getRandomFromPool();
-                        }
+                        result = getRandom();
                     }
 
                     const resultIndex = result.index;
@@ -331,29 +353,69 @@ registerPatcher({
             helpers.logMessage(`Setting ESL flag to ${settings.setEsl}...`);
             xelib.SetRecordFlag(xelib.GetFileHeader(patchFile), "ESL", settings.setEsl);
 
-            helpers.logMessage("Logging INGR changes...");
+            helpers.logMessage("Generating logs...");
+
+            /**
+             * @typedef {Object} LogByEffectsObj
+             * @property {IngrEffect} effect Effect
+             * @property {string[]} ingrs Array of ingredient names
+             */
+            /** @type {LogByEffectsObj[]} */
+            const logByEffectsList = [];
+
             xelib.GetElements(patchFile, "INGR").sort((a, b) => xelib.GetFormID(a) - xelib.GetFormID(b)).forEach(ingr => {
                 const formid = xelib.GetHexFormID(ingr);
                 const masterIngr = xelib.GetMasterRecord(ingr);
+                const ingrName = xelib.FullName(ingr);
 
-                locals.logArray.push("==============================");
-                locals.logArray.push(`INGR: ${xelib.Name(ingr)} [${formid}]`);
+                locals.logByIngredients.push("==============================");
+                locals.logByIngredients.push(`INGR: ${ingrName} [${formid}]\n`);
 
+                /** @type {IngrEffect[]} */
                 const originalEffects = xelib.GetElements(masterIngr, "Effects").map(effect => new IngrEffect(effect));
-                locals.logArray.push(`Original effects:`);
-                originalEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
+                locals.logByIngredients.push(`Original effects:`);
+                originalEffects.forEach(ingrEffect => {
+                    locals.logByIngredients.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`);
 
+                    if(logByEffectsList.some(({effect}) => effect.isDuplicate(ingrEffect))){
+                        return;
+                    }
+                    logByEffectsList.push({effect: ingrEffect, ingrs: []});
+                });
+                locals.logByIngredients.push("");
+
+                /** @type {IngrEffect[]} */
                 const currentEffects = xelib.GetElements(ingr, "Effects").map(effect => new IngrEffect(effect));
-                locals.logArray.push(`New effects:`);
-                currentEffects.forEach(ingrEffect => locals.logArray.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`));
+                locals.logByIngredients.push(`New effects:`);
+                currentEffects.forEach(ingrEffect => {
+                    locals.logByIngredients.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`);
+
+                    const findResult = logByEffectsList.find(({effect}) => effect.isDuplicate(ingrEffect));
+                    if(findResult){
+                        findResult.ingrs.push(ingrName);
+                        return;
+                    }
+                    logByEffectsList.push({effect: ingrEffect, ingrs: [ingrName]});
+                });
+                locals.logByIngredients.push("");
             });
 
-            helpers.logMessage(`Saving log file to ${logPath}...`);
-            fh.saveTextFile(logPath, locals.logArray.join("\n"));
+            logByEffectsList.sort((a, b) => a.effect.name.localeCompare(b.effect.name)).forEach(obj => {
+                locals.logByEffects.push("==============================");
+                locals.logByEffects.push(`Effect: ${obj.effect.name} [${obj.effect.formID}]\n`);
+                locals.logByEffects.push(`Count: ${obj.ingrs.length}`);
+                obj.ingrs.sort().forEach(name => locals.logByEffects.push(`- ${name}`));
+                locals.logByEffects.push("");
+            });
+
+            helpers.logMessage(`Saving log files...`);
+            fh.saveTextFile(logByIngrPath, locals.logByIngredients.join("\n"));
+            fh.saveTextFile(logByEffectsPath, locals.logByEffects.join("\n"));
 
             if(settings.showLog){
-                helpers.logMessage("Opening log file...");
-                fh.openFile(logPath);
+                helpers.logMessage("Opening log files...");
+                fh.openFile(logByIngrPath);
+                fh.openFile(logByEffectsPath);
             }
         }
     })

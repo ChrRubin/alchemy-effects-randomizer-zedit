@@ -30,7 +30,11 @@
 <section>
     <h3>Misc Settings</h3>
     <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.setEsl">Flag as ESL</label>
-    <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.showLog">Show log at completion (Spoiler Warning!)</label>
+    <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.showLog">Show logs at completion (Spoiler Warning!)</label>
     <br>
-    <button class="action-btn" ng-click="showLog()">Show Log</button>
+    <h4>Show Most Recent Log:</h4>
+    <div>
+        <button class="action-btn" ng-click="showLogByIngredients()">By Ingredients</button>
+        <button class="action-btn" ng-click="showLogByEffects()">By Effects</button>
+    </div>
 </section>
