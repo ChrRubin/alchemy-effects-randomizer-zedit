@@ -98,16 +98,6 @@ class IngrEffectList {
         /** @type {UniqueFormIDsObj[]} */
         this.clonedUniqueFormIDs = [...this.uniqueFormIDs];
     }
-    
-    /**
-     * Get random effect from list.
-     * @return {GetResultObj} Result
-     * @memberof IngrEffectList
-     */
-    getRandom(){
-        const i = Math.floor(Math.random() * this.list.length);
-        return {index: i, value: this.list[i]};
-    }
 
     /**
      * Gets the first effect with the highest occurence in the list.
@@ -139,6 +129,27 @@ class IngrEffectList {
         }
 
         return this.find(uniqueEffect.formID);
+    }
+
+    /**
+     * Get random effect from list. This is affected by the effect distribution.
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    getRandomFromPool(){
+        const i = Math.floor(Math.random() * this.list.length);
+        return {index: i, value: this.list[i]};
+    }
+
+    /**
+     * Get random effect from list. This is NOT affected by the effect distribution.
+     * @return {GetResultObj} Result
+     * @memberof IngrEffectList
+     */
+    getRandomEffect(){
+        const iUnique = Math.floor(Math.random() * this.uniqueFormIDs.length);
+        this.list = shuffleArray(this.list);
+        return this.find(this.uniqueFormIDs[iUnique].formID);
     }
 
     /**
@@ -202,6 +213,7 @@ registerPatcher({
         },
         defaultSettings: {
             randType: "groups",
+            ignoreDist: false,
             setEsl: true,
             showLog: false,
             patchFileName: 'RandomAlchemyPatch.esp'
@@ -220,7 +232,7 @@ registerPatcher({
             locals.logArray.push(`${new Date().toString()}`);
             locals.logArray.push("");
 
-            const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}`;
+            const settingsLog = `PATCHER SETTINGS:\nIgnored files: ${settings.ignoredFiles.join(", ")}\nRandomization type: ${settings.randType}\nignoreDist: ${settings.ignoreDist}\nsetEsl: ${settings.setEsl}\npatchFileName: ${settings.patchFileName}`;
             helpers.logMessage(settingsLog);
             locals.logArray.push(settingsLog);
 
@@ -235,7 +247,7 @@ registerPatcher({
                 locals.effectGroups = shuffleArray(effectGroups);
                 locals.index = 0;
             }
-            else if (["distribution", "inclusion", "random"].includes(settings.randType)){
+            else if (["distribution", "inclusion", "noInclusion"].includes(settings.randType)){
                 const effects = [];
                 winningIngrs.forEach(ingr => {
                     xelib.GetElements(ingr, "Effects").forEach(effect => {
@@ -281,12 +293,20 @@ registerPatcher({
                     }
                     else if (settings.randType === "inclusion" && i === 0){
                         result = locals.effectList.getUniqueEffect();
-                        if (!result){
-                            result = locals.effectList.getRandom();
+                        if (!result && settings.ignoreDist){
+                            result = locals.effectList.getRandomEffect();
+                        }
+                        else if (!result && !settings.ignoreDist){
+                            result = locals.effectList.getRandomFromPool();
                         }
                     }
                     else{
-                        result = locals.effectList.getRandom();
+                        if (settings.ignoreDist){
+                            result = locals.effectList.getRandomEffect();
+                        }
+                        else{
+                            result = locals.effectList.getRandomFromPool();
+                        }
                     }
 
                     const resultIndex = result.index;
