@@ -104,16 +104,17 @@ class IngrEffectList {
 
     /**
      * Gets the first effect with the highest occurence in the list.
+     * @param {boolean} noParalysisFirst `settings.noParalysisFirst`
      * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getFirstMostOccurrence(i) {
+    getFirstMostOccurrence(noParalysisFirst, i) {
         /** @type {UniqueFormIDsObj} */
         let most;
 
         let uniqueFormIDs = this.uniqueFormIDs;
-        if (i === 0) {
+        if (noParalysisFirst && i === 0) {
             uniqueFormIDs = this.uniqueFormIDs.filter(obj => obj.formID !== this._paralysisFormID);
         }
 
@@ -127,21 +128,22 @@ class IngrEffectList {
     }
 
     /**
-     * Gets one unique effect. This function will only return each unique effect once, and will return 0 if no unique effect remains. 
+     * Gets one unique effect. This function will only return each unique effect once, and will return 0 if no unique effect remains.
+     * @param {boolean} noParalysisFirst `settings.noParalysisFirst`
      * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getUniqueEffect(i) {
+    getUniqueEffect(noParalysisFirst, i) {
         if (this.clonedUniqueFormIDs.length < 1) {
             return 0;
         }
 
         let uniqueEffect;
-        if (i === 0 && this.clonedUniqueFormIDs[0].formID === this._paralysisFormID && this.clonedUniqueFormIDs.length === 1) {
-            return 0;
-        }
-        else if (i === 0 && this.clonedUniqueFormIDs[0].formID === this._paralysisFormID) {
+        if (noParalysisFirst && i === 0 && this.clonedUniqueFormIDs[0].formID === this._paralysisFormID) {
+            if (this.clonedUniqueFormIDs.length === 1) {
+                return 0;
+            }
             uniqueEffect = this.clonedUniqueFormIDs[1];
             this.clonedUniqueFormIDs.splice(1, 1);
         }
@@ -154,13 +156,14 @@ class IngrEffectList {
 
     /**
      * Get random effect from list. This is affected by the effect distribution.
+     * @param {boolean} noParalysisFirst `settings.noParalysisFirst`
      * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getRandomFromPool(i) {
+    getRandomFromPool(noParalysisFirst, i) {
         let pool = this.list;
-        if (i === 0) {
+        if (noParalysisFirst && i === 0) {
             pool = this.list.filter(ingrEffect => ingrEffect.formID !== this._paralysisFormID);
         }
 
@@ -170,13 +173,14 @@ class IngrEffectList {
 
     /**
      * Get random effect from list. This is NOT affected by the effect distribution.
+     * @param {boolean} noParalysisFirst `settings.noParalysisFirst`
      * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getRandomEffect(i) {
+    getRandomEffect(noParalysisFirst, i) {
         let uniqueFormIDs = this.uniqueFormIDs;
-        if (i === 0) {
+        if (noParalysisFirst && i === 0) {
             uniqueFormIDs = this.uniqueFormIDs.filter(obj => obj.formID !== this._paralysisFormID);
         }
 
@@ -262,6 +266,7 @@ registerPatcher({
         defaultSettings: {
             randType: "groups",
             ignoreDist: false,
+            noParalysisFirst: false,
             setEsl: true,
             showLog: false,
             patchFileName: 'RandomAlchemyPatch.esp'
@@ -338,9 +343,9 @@ registerPatcher({
 
                 function getRandom(i) {
                     if (settings.ignoreDist) {
-                        return effectList.getRandomEffect(i);
+                        return effectList.getRandomEffect(settings.noParalysisFirst, i);
                     }
-                    return effectList.getRandomFromPool(i);
+                    return effectList.getRandomFromPool(settings.noParalysisFirst, i);
                 }
 
                 while (i < 4) {
@@ -348,13 +353,13 @@ registerPatcher({
                     let result;
 
                     if (settings.randType === "distribution" && i === 0) {
-                        result = effectList.getFirstMostOccurrence(i);
+                        result = effectList.getFirstMostOccurrence(settings.noParalysisFirst, i);
                     }
                     else if (settings.randType === "distribution") {
-                        result = effectList.getRandomFromPool(i);
+                        result = effectList.getRandomFromPool(settings.noParalysisFirst, i);
                     }
                     else if (settings.randType === "inclusion" && i === 0) {
-                        result = effectList.getUniqueEffect(i);
+                        result = effectList.getUniqueEffect(settings.noParalysisFirst, i);
                         if (!result) {
                             result = getRandom(i);
                         }
