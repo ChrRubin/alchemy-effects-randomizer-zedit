@@ -1,7 +1,7 @@
 /**
  * @file zEdit Patcher - Randomizes the effects of alchemy ingredients.
  * @author ChrRubin
- * @version 1.0
+ * @version 1.0.1
  * @license MIT
  * @copyright ChrRubin 2020
  */
@@ -98,19 +98,27 @@ class IngrEffectList {
 
         /** @type {UniqueFormIDsObj[]} */
         this.clonedUniqueFormIDs = [...this.uniqueFormIDs];
+
+        this._paralysisFormID = "00073F30";
     }
 
     /**
      * Gets the first effect with the highest occurence in the list.
+     * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getFirstMostOccurrence(){
+    getFirstMostOccurrence(i) {
         /** @type {UniqueFormIDsObj} */
         let most;
 
-        this.uniqueFormIDs.forEach(obj => {
-            if(!most || obj.count > most.count){
+        let uniqueFormIDs = this.uniqueFormIDs;
+        if (i === 0) {
+            uniqueFormIDs = this.uniqueFormIDs.filter(obj => obj.formID !== this._paralysisFormID);
+        }
+
+        uniqueFormIDs.forEach(obj => {
+            if (!most || obj.count > most.count) {
                 most = obj;
             }
         });
@@ -120,13 +128,25 @@ class IngrEffectList {
 
     /**
      * Gets one unique effect. This function will only return each unique effect once, and will return 0 if no unique effect remains. 
+     * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getUniqueEffect(){
-        const uniqueEffect = this.clonedUniqueFormIDs.shift();
-        if(!uniqueEffect){
+    getUniqueEffect(i) {
+        if (this.clonedUniqueFormIDs.length < 1) {
             return 0;
+        }
+
+        let uniqueEffect;
+        if (i === 0 && this.clonedUniqueFormIDs[0].formID === this._paralysisFormID && this.clonedUniqueFormIDs.length === 1) {
+            return 0;
+        }
+        else if (i === 0 && this.clonedUniqueFormIDs[0].formID === this._paralysisFormID) {
+            uniqueEffect = this.clonedUniqueFormIDs[1];
+            this.clonedUniqueFormIDs.splice(1, 1);
+        }
+        else {
+            uniqueEffect = this.clonedUniqueFormIDs.shift();
         }
 
         return this.find(uniqueEffect.formID);
@@ -134,23 +154,35 @@ class IngrEffectList {
 
     /**
      * Get random effect from list. This is affected by the effect distribution.
+     * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getRandomFromPool(){
-        const i = Math.floor(Math.random() * this.list.length);
-        return {index: i, value: this.list[i]};
+    getRandomFromPool(i) {
+        let pool = this.list;
+        if (i === 0) {
+            pool = this.list.filter(ingrEffect => ingrEffect.formID !== this._paralysisFormID);
+        }
+
+        const iRandom = Math.floor(Math.random() * pool.length);
+        return this.find(pool[iRandom].formID);
     }
 
     /**
      * Get random effect from list. This is NOT affected by the effect distribution.
+     * @param {number} i Index of resulting effect. Used to prevent paralysis from being the first effect.
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    getRandomEffect(){
-        const iUnique = Math.floor(Math.random() * this.uniqueFormIDs.length);
+    getRandomEffect(i) {
+        let uniqueFormIDs = this.uniqueFormIDs;
+        if (i === 0) {
+            uniqueFormIDs = this.uniqueFormIDs.filter(obj => obj.formID !== this._paralysisFormID);
+        }
+
+        const iUnique = Math.floor(Math.random() * uniqueFormIDs.length);
         this.list = shuffleArray(this.list);
-        return this.find(this.uniqueFormIDs[iUnique].formID);
+        return this.find(uniqueFormIDs[iUnique].formID);
     }
 
     /**
@@ -256,11 +288,9 @@ registerPatcher({
             locals.logByIngredients.push(settingsLog);
             locals.logByEffects.push(settingsLog);
 
-            const winningIngrs = ingrs.map(ingr => xelib.GetWinningOverride(ingr));
-
-            if (settings.randType === "groups"){
+            if (settings.randType === "groups") {
                 const effectGroups = [];
-                winningIngrs.forEach(ingr => {
+                ingrs.forEach(ingr => {
                     effectGroups.push(xelib.GetElement(ingr, "Effects"));
                 });
 
@@ -269,7 +299,7 @@ registerPatcher({
             }
             else if (["distribution", "inclusion", "noInclusion"].includes(settings.randType)){
                 const effects = [];
-                winningIngrs.forEach(ingr => {
+                ingrs.forEach(ingr => {
                     xelib.GetElements(ingr, "Effects").forEach(effect => {
                         effects.push(effect);
                     });
@@ -281,11 +311,11 @@ registerPatcher({
                 throw new ChrCustomError("Invalid randomization type selected!");
             }
 
-            locals.winningIngrs = winningIngrs;
+            locals.ingrs = ingrs;
         },
         process: [{
             records: (filesToPatch, helpers, settings, locals) => {
-                return shuffleArray(locals.winningIngrs);
+                return shuffleArray(locals.ingrs);
             },
             patch: (record, helpers, settings, locals) => {
                 const formid = xelib.GetHexFormID(record);
@@ -302,33 +332,35 @@ registerPatcher({
 
                 /** @type {IngrEffect[]} */
                 const addedEffects = [];
+                /** @type {IngrEffectList} */
+                const effectList = locals.effectList;
                 let i = 0;
 
-                function getRandom(){
-                    if (settings.ignoreDist){
-                        return locals.effectList.getRandomEffect();
+                function getRandom(i) {
+                    if (settings.ignoreDist) {
+                        return effectList.getRandomEffect(i);
                     }
-                    return locals.effectList.getRandomFromPool();
+                    return effectList.getRandomFromPool(i);
                 }
 
                 while (i < 4) {
                     /** @type {GetResultObj} */
                     let result;
 
-                    if (settings.randType === "distribution" && i === 0){ 
-                        result = locals.effectList.getFirstMostOccurrence(); 
+                    if (settings.randType === "distribution" && i === 0) {
+                        result = effectList.getFirstMostOccurrence(i);
                     }
-                    else if (settings.randType === "distribution"){
-                        result = locals.effectList.getRandomFromPool();
+                    else if (settings.randType === "distribution") {
+                        result = effectList.getRandomFromPool(i);
                     }
-                    else if (settings.randType === "inclusion" && i === 0){
-                        result = locals.effectList.getUniqueEffect();
-                        if(!result){
-                            result = getRandom();
+                    else if (settings.randType === "inclusion" && i === 0) {
+                        result = effectList.getUniqueEffect(i);
+                        if (!result) {
+                            result = getRandom(i);
                         }
                     }
-                    else{
-                        result = getRandom();
+                    else {
+                        result = getRandom(i);
                     }
 
                     const resultIndex = result.index;
@@ -339,8 +371,8 @@ registerPatcher({
                     }
                     
                     addedEffects.push(resultEffect);
-                    if (settings.randType === "distribution"){
-                        locals.effectList.remove(resultIndex);
+                    if (settings.randType === "distribution") {
+                        effectList.remove(resultIndex);
                     }
 
                     const recordEffect = xelib.GetElement(recordEffectsElement, `[${i}]`);
