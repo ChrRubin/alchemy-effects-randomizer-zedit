@@ -24,6 +24,9 @@
     <div title="Remove weights based on effect distribution, leading to more randomness.">
         <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.ignoreDist" ng-disabled="settings.randomizeAlchemyPatcher.randType === 'groups' || settings.randomizeAlchemyPatcher.randType === 'distribution'">Ignore Effect Distribution</label>
     </div>
+    <div title="Slightly nudges RNG in order to prevent a camera bug when Player gets affected by Paralysis. Does not affect Keep Effect Groups randomization type.">
+        <label><input type="checkbox" ng-model="settings.randomizeAlchemyPatcher.noParalysisFirst" ng-disabled="settings.randomizeAlchemyPatcher.randType === 'groups'">Prevent Paralysis from being first effect</label>
+    </div>
 </section>
 
 <hr>
