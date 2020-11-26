@@ -1,7 +1,7 @@
 /**
  * @file zEdit Patcher - Randomizes the effects of alchemy ingredients.
  * @author ChrRubin
- * @version 1.0.1
+ * @version 1.1.0
  * @license MIT
  * @copyright ChrRubin 2020
  */
@@ -22,26 +22,47 @@ class ChrCustomError extends Error {
 }
 
 class IngrEffect {
-    constructor(handle){
-        /** @type {number} Handle to effect element */
+    constructor(handle) {
+        /**
+         * Handle to effect element.
+         * @type {number} 
+         */
         this.handle = handle;
 
-        /** @type {number} Handle to linked effect record */
+        /**
+         * Handle to linked effect record.
+         * @type {number}
+         */
         this.efidLink = xelib.GetWinningOverride(xelib.GetLinksTo(handle, "EFID"));
 
-        /** @type {string} FormID of linked effect record */
+        /**
+         * FormID of linked effect record.
+         * @type {string}
+         */
         this.formID = xelib.GetHexFormID(this.efidLink);
 
-        /** @type {string} Name of linked effect record */
+        /**
+         * Name of linked effect record.
+         * @type {string}
+         */
         this.name = xelib.FullName(this.efidLink);
 
-        /** @type {string} Magnitude of effect rounded to 6 decimal places */
+        /** 
+         * Magnitude of effect rounded to 6 decimal places.
+         * @type {string} 
+         */
         this.magnitude = xelib.GetFloatValue(handle, "EFIT\\Magnitude").toFixed(6);
 
-        /** @type {number} Area of effect */
+        /**
+         * Area of effect.
+         * @type {number}
+         */
         this.area = xelib.GetUIntValue(handle, "EFIT\\Area");
 
-        /** @type {number} Duration of effect */
+        /**
+         * Duration of effect.
+         * @type {number}
+         */
         this.duration = xelib.GetUIntValue(handle, "EFIT\\Duration");
     }
 
@@ -51,7 +72,7 @@ class IngrEffect {
      * @return {boolean} True if effect is duplicate.
      * @memberof IngrEffect
      */
-    isDuplicate(effect){
+    isDuplicate(effect) {
         return effect.formID === this.formID;
     }
 }
@@ -73,27 +94,33 @@ class IngrEffectList {
      * @param {number[]} handles Array of effect handles
      * @memberof IngrEffectList
      */
-    constructor(handles){
+    constructor(handles) {
         const formIdSet = new Set();
 
-        /** @type {IngrEffect[]} */
+        /**
+         * Array of all loaded effects.
+         * @type {IngrEffect[]}
+         */
         this.list = handles.map(handle => {
             const ingrEffect = new IngrEffect(handle);
             formIdSet.add(ingrEffect.formID);
             return ingrEffect;
         });
 
-        /** @type {UniqueFormIDsObj[]} */
+        /**
+         * Array of all unique effects' FormIDs.
+         * @type {UniqueFormIDsObj[]} 
+         */
         this.uniqueFormIDs = [];
 
         formIdSet.forEach(formID => {
             let count = 0;
             this.list.forEach(effect => {
-                if(effect.formID === formID){
+                if (effect.formID === formID) {
                     count += 1;
                 }
             });
-            this.uniqueFormIDs.push({formID: formID, count: count});
+            this.uniqueFormIDs.push({ formID: formID, count: count });
         });
 
         /** @type {UniqueFormIDsObj[]} */
@@ -195,16 +222,16 @@ class IngrEffectList {
      * @return {GetResultObj} Result
      * @memberof IngrEffectList
      */
-    find(formID){
+    find(formID) {
         let resultIndex;
         const value = this.list.find((effect, index) => {
-            if(effect.formID === formID){
+            if (effect.formID === formID) {
                 resultIndex = index;
                 return true;
             }
         });
 
-        return {index: resultIndex, value: value};
+        return { index: resultIndex, value: value };
     }
 
     /**
@@ -212,10 +239,10 @@ class IngrEffectList {
      * @param {number} i Index of effect
      * @memberof IngrEffectList
      */
-    remove(i){
+    remove(i) {
         const effect = this.list[i];
         this.uniqueFormIDs.forEach(obj => {
-            if(obj.formID === effect.formID){
+            if (obj.formID === effect.formID) {
                 obj.count -= 1;
             }
         });
@@ -239,18 +266,18 @@ registerPatcher({
     settings: {
         label: 'Alchemy Effects Randomizer',
         templateUrl: `${patcherUrl}/partials/settings.html`,
-        controller: function($scope) {
+        controller: function ($scope) {
             const settings = $scope.settings.randomizeAlchemyPatcher;
 
             $scope.showLogByIngredients = () => {
-                if (!fh.jetpack.exists(logByIngrPath)){
+                if (!fh.jetpack.exists(logByIngrPath)) {
                     alert("Log file does not exist!");
                     return;
                 }
                 fh.openFile(logByIngrPath);
             };
             $scope.showLogByEffects = () => {
-                if (!fh.jetpack.exists(logByEffectsPath)){
+                if (!fh.jetpack.exists(logByEffectsPath)) {
                     alert("Log file does not exist!");
                     return;
                 }
@@ -258,7 +285,7 @@ registerPatcher({
             };
 
             $scope.$watch("settings.randomizeAlchemyPatcher.randType", (newValue) => {
-                if(["groups", "distribution"].includes(newValue)){
+                if (["groups", "distribution"].includes(newValue)) {
                     settings.ignoreDist = false;
                 }
             });
@@ -275,12 +302,12 @@ registerPatcher({
     execute: (patchFile, helpers, settings, locals) => ({
         initialize: () => {
             const ingrs = helpers.loadRecords("INGR", false);
-            if (!ingrs.length){
+            if (!ingrs.length) {
                 throw new ChrCustomError("Failed to load INGR records!");
             }
 
             // Stores output log strings
-            locals.logByIngredients = []; 
+            locals.logByIngredients = [];
             locals.logByEffects = [];
 
             const dateLog = `${new Date().toString()}\n`;
@@ -302,7 +329,7 @@ registerPatcher({
                 locals.effectGroups = shuffleArray(effectGroups);
                 locals.index = 0;
             }
-            else if (["distribution", "inclusion", "noInclusion"].includes(settings.randType)){
+            else if (["distribution", "inclusion", "noInclusion"].includes(settings.randType)) {
                 const effects = [];
                 ingrs.forEach(ingr => {
                     xelib.GetElements(ingr, "Effects").forEach(effect => {
@@ -312,7 +339,7 @@ registerPatcher({
 
                 locals.effectList = new IngrEffectList(shuffleArray(effects));
             }
-            else{
+            else {
                 throw new ChrCustomError("Invalid randomization type selected!");
             }
 
@@ -328,7 +355,7 @@ registerPatcher({
 
                 const recordEffectsElement = xelib.GetElement(record, "Effects");
 
-                if (settings.randType === "groups"){
+                if (settings.randType === "groups") {
                     const newEffectGroup = locals.effectGroups[locals.index];
                     xelib.SetElement(recordEffectsElement, newEffectGroup);
                     locals.index += 1;
@@ -370,11 +397,11 @@ registerPatcher({
 
                     const resultIndex = result.index;
                     const resultEffect = result.value;
-                    
-                    if (addedEffects.some(effect => effect.isDuplicate(resultEffect))){
+
+                    if (addedEffects.some(effect => effect.isDuplicate(resultEffect))) {
                         continue;
                     }
-                    
+
                     addedEffects.push(resultEffect);
                     if (settings.randType === "distribution") {
                         effectList.remove(resultIndex);
@@ -414,10 +441,10 @@ registerPatcher({
                 originalEffects.forEach(ingrEffect => {
                     locals.logByIngredients.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`);
 
-                    if(logByEffectsList.some(({effect}) => effect.isDuplicate(ingrEffect))){
+                    if (logByEffectsList.some(({ effect }) => effect.isDuplicate(ingrEffect))) {
                         return;
                     }
-                    logByEffectsList.push({effect: ingrEffect, ingrs: []});
+                    logByEffectsList.push({ effect: ingrEffect, ingrs: [] });
                 });
                 locals.logByIngredients.push("");
 
@@ -427,12 +454,12 @@ registerPatcher({
                 currentEffects.forEach(ingrEffect => {
                     locals.logByIngredients.push(`- ${ingrEffect.name} (M: ${ingrEffect.magnitude}, A: ${ingrEffect.area}, D: ${ingrEffect.duration})`);
 
-                    const findResult = logByEffectsList.find(({effect}) => effect.isDuplicate(ingrEffect));
-                    if(findResult){
+                    const findResult = logByEffectsList.find(({ effect }) => effect.isDuplicate(ingrEffect));
+                    if (findResult) {
                         findResult.ingrs.push(ingrName);
                         return;
                     }
-                    logByEffectsList.push({effect: ingrEffect, ingrs: [ingrName]});
+                    logByEffectsList.push({ effect: ingrEffect, ingrs: [ingrName] });
                 });
                 locals.logByIngredients.push("");
             });
@@ -449,7 +476,7 @@ registerPatcher({
             fh.saveTextFile(logByIngrPath, locals.logByIngredients.join("\n"));
             fh.saveTextFile(logByEffectsPath, locals.logByEffects.join("\n"));
 
-            if(settings.showLog){
+            if (settings.showLog) {
                 helpers.logMessage("Opening log files...");
                 fh.openFile(logByIngrPath);
                 fh.openFile(logByEffectsPath);
